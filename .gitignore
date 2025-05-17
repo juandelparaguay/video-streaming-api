@@ -1,0 +1,47 @@
+# Entornos virtuales
+venv
+.venv
+env
+.env
+
+# Archivos de Python generados
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+sdist/
+
+# Archivos de registro
+*.log
+
+# Archivos temporales del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos específicos de IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Archivos de cobertura de pruebas
+.coverage
+htmlcov/
+coverage.xml
+
+# Archivos de paquetes instalados (si no usas venv)
+# Aunque se recomienda usar venv, si no lo haces, podrías ignorar:
+# lib/
+# lib64/
+# bin/
+
+# Archivos de Docker (si aplica)
+# docker-compose.override.yml
+# .dockerenv
+
+# Otros archivos o directorios específicos de tu proyecto
+# ejemplo_de_archivo_temporal.txt
+# directorio_de_datos_locales/
