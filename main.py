@@ -5,6 +5,10 @@ import uvicorn
 import os
 import json
 import aiofiles
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 app = FastAPI()
 
@@ -23,18 +27,20 @@ async def root():
 
 @app.get("/files")
 async def get_files():
-    
-    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
-    
-    # full_path = os.path.abspath('files')  Obtiene la ruta absoluta para seguridad
-
-    if not os.path.exists(RUTA_VIDEOS):
-        raise HTTPException(status_code=404, detail=f"La ruta no existe.")
-
-    if not os.path.isdir(RUTA_VIDEOS):
-        raise HTTPException(status_code=400, detail=f"La ruta no es un directorio.")
-
     try:
+    
+        RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+        
+        # print(RUTA_VIDEOS)
+        
+        # full_path = os.path.abspath('files')  Obtiene la ruta absoluta para seguridad
+
+        if not os.path.exists(RUTA_VIDEOS):
+            raise HTTPException(status_code=404, detail=f"La ruta no existe.")
+
+        if not os.path.isdir(RUTA_VIDEOS):
+            raise HTTPException(status_code=400, detail=f"La ruta no es un directorio.")
+
         contents = os.listdir(RUTA_VIDEOS)
         file_list = []
         for item in contents:
