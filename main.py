@@ -23,21 +23,22 @@ async def root():
 
 @app.get("/files")
 async def get_files():
-   
     
-    full_path = os.path.abspath('files')  # Obtiene la ruta absoluta para seguridad
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    
+    # full_path = os.path.abspath('files')  Obtiene la ruta absoluta para seguridad
 
-    if not os.path.exists(full_path):
+    if not os.path.exists(RUTA_VIDEOS):
         raise HTTPException(status_code=404, detail=f"La ruta no existe.")
 
-    if not os.path.isdir(full_path):
+    if not os.path.isdir(RUTA_VIDEOS):
         raise HTTPException(status_code=400, detail=f"La ruta no es un directorio.")
 
     try:
-        contents = os.listdir(full_path)
+        contents = os.listdir(RUTA_VIDEOS)
         file_list = []
         for item in contents:
-            item_path = os.path.join(full_path, item)
+            item_path = os.path.join(RUTA_VIDEOS, item)
             file_info = {
                 "name": item,
                 "is_directory": os.path.isdir(item_path),
@@ -53,7 +54,10 @@ async def get_files():
     
 @app.get("/files/{filename}")
 async def get_file(filename: str):
-    file_path = os.path.join("files", filename)
+    
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    
+    file_path = os.path.join(RUTA_VIDEOS, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     if not os.path.isfile(file_path):
