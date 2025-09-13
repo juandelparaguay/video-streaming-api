@@ -18,6 +18,9 @@ app = FastAPI()
 # --- Funciones auxiliares para formato de datos ---
 def format_size(size_in_bytes: int):
     """Convierte el tamaño en bytes a un formato legible (KB, MB, GB)."""
+    
+    #print(size_in_bytes)
+    
     if size_in_bytes is None:
         return "N/A"
     if size_in_bytes < 1024:
@@ -104,10 +107,13 @@ async def get_files():
         for item in contents:
             item_path = os.path.join(RUTA_VIDEOS, item)
             duration = await get_video_duration(item_path)
+            
+            print(os.path.getsize(item_path))
+            
             file_info = {
                 "name": item,
                 "is_directory": os.path.isdir(item_path),
-                "size": format_size(os.path.getsize(item_path)) if not format_size(os.path.isdir(item_path)) else None,
+                "size": format_size(os.path.getsize(item_path)) if not os.path.isdir(item_path) else None,
                 "modified": format_modified_time(os.path.getmtime(item_path)),
                 "duration" : duration
                 }
