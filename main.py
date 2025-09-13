@@ -6,11 +6,69 @@ import os
 import json
 import aiofiles
 from dotenv import load_dotenv
+from datetime import datetime
+import subprocess
+
 
 load_dotenv()
 
 
 app = FastAPI()
+
+# --- Funciones auxiliares para formato de datos ---
+def format_size(size_in_bytes: int):
+    """Convierte el tamaño en bytes a un formato legible (KB, MB, GB)."""
+    if size_in_bytes is None:
+        return "N/A"
+    if size_in_bytes < 1024:
+        return f"{size_in_bytes} B"
+    elif size_in_bytes < 1024 * 1024:
+        return f"{size_in_bytes / 1024:.2f} KB"
+    elif size_in_bytes < 1024 * 1024 * 1024:
+        return f"{size_in_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{size_in_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+def format_modified_time(timestamp: float):
+    """Convierte un timestamp de UNIX a un string de fecha y hora legible."""
+    if timestamp is None:
+        return "N/A"
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+async def get_video_duration(file_path: str) -> str:
+    """
+    Obtiene la duración de un archivo de video usando ffprobe.
+    Retorna la duración en segundos como una cadena o "N/A" si falla.
+    """
+    try:
+        # Comando para ffprobe para extraer la duración del video
+        command = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            file_path
+        ]
+        
+        # Ejecuta el comando y captura la salida
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        duration_seconds = float(result.stdout.strip())
+        
+        # Formatea la duración para mostrar horas, minutos y segundos
+        hours = int(duration_seconds // 3600)
+        minutes = int((duration_seconds % 3600) // 60)
+        seconds = int(duration_seconds % 60)
+
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes:02d}:{seconds:02d}"
+    
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
+        # Maneja errores si ffprobe no está instalado o si el archivo no es un video válido
+        print(f"Error al obtener la duración de {file_path}: {e}")
+        return "N/A"
+    #-------- FIN DE FUNCIONES AUXILIARES ------- 
 
 
 @app.get("/")
@@ -45,12 +103,14 @@ async def get_files():
         file_list = []
         for item in contents:
             item_path = os.path.join(RUTA_VIDEOS, item)
+            duration = await get_video_duration(item_path)
             file_info = {
                 "name": item,
                 "is_directory": os.path.isdir(item_path),
-                "size": os.path.getsize(item_path) if not os.path.isdir(item_path) else None,
-                "modified": os.path.getmtime(item_path)
-            }
+                "size": format_size(os.path.getsize(item_path)) if not format_size(os.path.isdir(item_path)) else None,
+                "modified": format_modified_time(os.path.getmtime(item_path)),
+                "duration" : duration
+                }
             file_list.append(file_info)
 
         return {"contents": file_list}
