@@ -122,23 +122,6 @@ async def get_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al explorar la carpeta: {str(e)}")
     
-@app.get("/files/{filename}")
-async def get_file(filename: str):
-    
-    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
-    
-    file_path = os.path.join(RUTA_VIDEOS, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=400, detail="Path is not a file")
-    async def video_stream():
-        async with aiofiles.open(file_path, mode="rb") as file:
-            while chunk := await file.read(1024 * 1024):  # Lee en chunks de 1MB
-                yield chunk
-
-    return StreamingResponse(video_stream(), media_type="video/mp4")
-
 @app.get("/files/videos-by-date")
 async def get_videos_count_by_date():
     """
@@ -172,6 +155,25 @@ async def get_videos_count_by_date():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al procesar estadísticas: {str(e)}")
+
+    
+@app.get("/files/{filename}")
+async def get_file(filename: str):
+    
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    
+    file_path = os.path.join(RUTA_VIDEOS, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=400, detail="Path is not a file")
+    async def video_stream():
+        async with aiofiles.open(file_path, mode="rb") as file:
+            while chunk := await file.read(1024 * 1024):  # Lee en chunks de 1MB
+                yield chunk
+
+    return StreamingResponse(video_stream(), media_type="video/mp4")
+
 
     
                 
