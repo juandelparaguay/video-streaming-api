@@ -1,9 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-import httpx
-import uvicorn
+from collections import Counter
 import os
-import json
 import aiofiles
 from dotenv import load_dotenv
 from datetime import datetime
@@ -140,6 +138,40 @@ async def get_file(filename: str):
                 yield chunk
 
     return StreamingResponse(video_stream(), media_type="video/mp4")
+
+@app.get("/files/videos-by-date")
+async def get_videos_count_by_date():
+    """
+    Escanea el directorio de medios y devuelve un conteo de videos agrupados por fecha.
+    Formato de respuesta: {"YYYY-MM-DD": cantidad}
+    """
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    
+    if not os.path.exists(RUTA_VIDEOS):
+        raise HTTPException(status_code=404, detail="Directorio de medios no encontrado")
+
+    try:
+        files = [f for f in os.listdir(RUTA_VIDEOS) if f.endswith('.mp4')]
+        dates = []
+
+        for filename in files:
+            file_path = os.path.join(RUTA_VIDEOS, filename)
+            # Obtenemos la fecha de modificación del archivo
+            mtime = os.path.getmtime(file_path)
+            # Convertimos a formato YYYY-MM-DD para agrupar
+            date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+            dates.append(date_str)
+
+        # Counter crea un diccionario con las frecuencias: {'2026-02-10': 10, '2026-02-11': 2}
+        counts = dict(Counter(dates))
+        
+        # Opcional: Ordenar por fecha descendente
+        ordered_counts = dict(sorted(counts.items(), reverse=True))
+        
+        return ordered_counts
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar estadísticas: {str(e)}")
 
     
                 
