@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 from datetime import datetime
 import subprocess
 
+from fastapi import FastAPI, HTTPException, Query
+import httpx  # Necesario para consultar las estadísticas de Nginx
+import xml.etree.ElementTree as ET # Para procesar la respuesta de Nginx
+from typing import Optional
+
 
 load_dotenv()
 
