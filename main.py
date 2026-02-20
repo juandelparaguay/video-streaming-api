@@ -83,44 +83,100 @@ async def root():
     """
     return {"message": "Hello World"}
 
-
-@app.get("/files")
-async def get_files():
+@app.get("/stream-status")
+async def get_stream_status():
+    """
+    Consulta las estadísticas de Nginx RTMP para saber si hay una transmisión activa.
+    Requiere que el modulo rtmp_stat esté habilitado en Nginx (puerto 80).
+    """
     try:
-    
-        RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
-        
-        # print(RUTA_VIDEOS)
-        
-        # full_path = os.path.abspath('files')  Obtiene la ruta absoluta para seguridad
-
-        if not os.path.exists(RUTA_VIDEOS):
-            raise HTTPException(status_code=404, detail=f"La ruta no existe.")
-
-        if not os.path.isdir(RUTA_VIDEOS):
-            raise HTTPException(status_code=400, detail=f"La ruta no es un directorio.")
-
-        contents = os.listdir(RUTA_VIDEOS)
-        file_list = []
-        for item in contents:
-            item_path = os.path.join(RUTA_VIDEOS, item)
-            duration = await get_video_duration(item_path)
+        # Intentamos obtener el XML de estadísticas de Nginx (usualmente en puerto 80)
+        async with httpx.AsyncClient() as client:
+            # Cambia esta URL si tu servidor de estadísticas está en otro path o puerto
+            response = await client.get("http://localhost/stat", timeout=2.0)
             
-            print(os.path.getsize(item_path))
-            
-            file_info = {
-                "name": item,
-                "is_directory": os.path.isdir(item_path),
-                "size": format_size(os.path.getsize(item_path)) if not os.path.isdir(item_path) else None,
-                "modified": format_modified_time(os.path.getmtime(item_path)),
-                "duration" : duration
-                }
-            file_list.append(file_info)
+        if response.status_code != 200:
+            return {"is_live": False, "message": "No se pudo conectar con el servidor de estadísticas"}
 
-        return {"contents": file_list}
+        root = ET.fromstring(response.content)
+        
+        # Buscamos streams activos dentro de la aplicación 'live'
+        streams_activos = []
+        for app in root.findall(".//app"):
+            app_name = app.find("name").text
+            if app_name == "live":
+                for stream in app.findall(".//stream"):
+                    name = stream.find("name").text
+                    # Un stream está activo si tiene un 'publisher' (alguien enviando video)
+                    publisher = stream.find("publisher")
+                    if publisher is not None:
+                        streams_activos.append({
+                            "name": name,
+                            "time": stream.find("time").text, # Tiempo en ms que lleva activo
+                            "bw_video": stream.find("bw_video").text, # Ancho de banda video
+                            "client_id": publisher.find("clientid").text
+                        })
+
+        return {
+            "is_live": len(streams_activos) > 0,
+            "active_streams": streams_activos,
+            "server_time": datetime.now().strftime("%H:%M:%S")
+        }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al explorar la carpeta: {str(e)}")
+        # Fallback manual: Si las estadísticas fallan, podemos verificar si existe el archivo HLS temporal
+        # Esto es menos preciso pero sirve como respaldo
+        hls_path = "/var/www/html/stream/hls/norte.m3u8"
+        if os.path.exists(hls_path):
+            return {"is_live": True, "method": "file_fallback", "name": "norte"}
+            
+        return {"is_live": False, "error": str(e)}
+
+    
+@app.get("/files")
+async def get_files(date: Optional[str] = Query(None, description="Filtrar por fecha en formato YYYY-MM-DD")):
+    """
+    Lista los archivos con sus metadatos. 
+    Si se proporciona el parámetro 'date', filtra los resultados.
+    """
+    try:
+        RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+        if not os.path.exists(RUTA_VIDEOS):
+            raise HTTPException(status_code=404, detail="La ruta no existe.")
+        
+        contents = os.listdir(RUTA_VIDEOS)
+        file_list = []
+        
+        for item in contents:
+            item_path = os.path.join(RUTA_VIDEOS, item)
+            
+            # Solo procesar archivos mp4
+            if not os.path.isfile(item_path) or not item.endswith('.mp4'):
+                continue
+            
+            # Obtener fecha de modificación para el filtro
+            mtime = os.path.getmtime(item_path)
+            file_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+            
+            # Aplicar filtro si el parámetro date existe
+            if date and file_date != date:
+                continue
+                
+            duration = await get_video_duration(item_path)
+            file_list.append({
+                "name": item,
+                "is_directory": False,
+                "size": format_size(os.path.getsize(item_path)),
+                "modified": format_modified_time(mtime),
+                "duration" : duration
+            })
+            
+        # Ordenar por los más recientes primero
+        file_list.sort(key=lambda x: x["modified"], reverse=True)
+        
+        return {"contents": file_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/files/videos-by-date")
 async def get_videos_count_by_date():
