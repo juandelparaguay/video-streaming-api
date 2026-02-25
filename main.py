@@ -137,6 +137,46 @@ async def get_stream_status():
             
         return {"is_live": False, "error": str(e)}
 
+@app.get("/files/{filename}/preview")
+async def get_video_preview(filename: str, seconds: int = 3):
+    """
+    Extrae y transmite los primeros N segundos de un video para previsualización.
+    """
+    file_path = os.path.join(RUTA_VIDEOS, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+
+    # Comando FFmpeg para recortar los primeros segundos
+    # -ss 00:00:00: Empezar en el segundo 0
+    # -t: Duración (por defecto 3 segundos)
+    # -movflags frag_keyframe+empty_moov: Optimiza para streaming mp4
+    command = [
+        'ffmpeg',
+        '-ss', '00:00:00',
+        '-i', file_path,
+        '-t', str(seconds),
+        '-c:v', 'libx264', # Recodificar para asegurar compatibilidad
+        '-preset', 'ultrafast', # Mínima latencia de procesamiento
+        '-c:a', 'aac',
+        '-f', 'mp4',
+        '-movflags', 'frag_keyframe+empty_moov',
+        'pipe:1'
+    ]
+
+    def stream_preview():
+        # Ejecutamos el proceso y enviamos los bytes por partes (chunks)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            while True:
+                chunk = process.stdout.read(65536) # 64KB
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.kill() # Asegurar que el proceso se cierre
+
+    return StreamingResponse(stream_preview(), media_type="video/mp4")
     
 @app.get("/files")
 async def get_files(date: Optional[str] = Query(None, description="Filtrar por fecha en formato YYYY-MM-DD")):
