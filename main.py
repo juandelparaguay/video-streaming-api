@@ -142,6 +142,9 @@ async def get_video_preview(filename: str, seconds: int = 3):
     """
     Extrae y transmite los primeros N segundos de un video para previsualización.
     """
+
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    
     file_path = os.path.join(RUTA_VIDEOS, filename)
     
     if not os.path.exists(file_path):
