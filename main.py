@@ -140,44 +140,40 @@ async def get_stream_status():
 @app.get("/files/{filename}/preview")
 async def get_video_preview(filename: str, seconds: int = 3):
     """
-    Extrae y transmite los primeros N segundos de un video para previsualización.
+    Extrae los primeros N segundos. 
+    Optimizado para evitar crashes en reproductores móviles (media_kit/mpv).
     """
-
-    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
-    
     file_path = os.path.join(RUTA_VIDEOS, filename)
-    
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Video no encontrado")
 
-    # Comando FFmpeg para recortar los primeros segundos
-    # -ss 00:00:00: Empezar en el segundo 0
-    # -t: Duración (por defecto 3 segundos)
-    # -movflags frag_keyframe+empty_moov: Optimiza para streaming mp4
+    # Ajustes en el comando FFmpeg:
+    # -an: Elimina el audio para el preview (evita problemas de sincronización y reduce peso)
+    # -c:v copy: Si el origen es h264, no recodificamos (es instantáneo)
+    # -f ismv: Formato MP4 fragmentado más estable para pipes
     command = [
         'ffmpeg',
         '-ss', '00:00:00',
         '-i', file_path,
         '-t', str(seconds),
-        '-c:v', 'libx264', # Recodificar para asegurar compatibilidad
-        '-preset', 'ultrafast', # Mínima latencia de procesamiento
-        '-c:a', 'aac',
+        '-c:v', 'copy', 
+        '-an', 
         '-f', 'mp4',
-        '-movflags', 'frag_keyframe+empty_moov',
+        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
         'pipe:1'
     ]
 
     def stream_preview():
-        # Ejecutamos el proceso y enviamos los bytes por partes (chunks)
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:
             while True:
-                chunk = process.stdout.read(65536) # 64KB
+                chunk = process.stdout.read(65536)
                 if not chunk:
                     break
                 yield chunk
         finally:
-            process.kill() # Asegurar que el proceso se cierre
+            process.terminate()
+            process.wait()
 
     return StreamingResponse(stream_preview(), media_type="video/mp4")
     
