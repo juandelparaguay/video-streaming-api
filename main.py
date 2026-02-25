@@ -143,6 +143,7 @@ async def get_video_preview(filename: str, seconds: int = 3):
     Extrae los primeros N segundos. 
     Optimizado para evitar crashes en reproductores móviles (media_kit/mpv).
     """
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
     file_path = os.path.join(RUTA_VIDEOS, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Video no encontrado")
