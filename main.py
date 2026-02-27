@@ -74,6 +74,29 @@ async def get_video_duration(file_path: str) -> str:
         # Maneja errores si ffprobe no está instalado o si el archivo no es un video válido
         print(f"Error al obtener la duración de {file_path}: {e}")
         return "N/A"
+
+
+
+async def get_raw_duration(file_path: str) -> float:
+    """Obtiene la duración exacta en segundos (float)."""
+    try:
+        command = [
+            'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        return float(result.stdout.strip())
+    except:
+        return 0.0
+
+async def get_video_duration_formatted(file_path: str) -> str:
+    """Obtiene la duración formateada para la UI."""
+    duration_seconds = await get_raw_duration(file_path)
+    if duration_seconds == 0.0: return "N/A"
+    hours = int(duration_seconds // 3600)
+    minutes = int((duration_seconds % 3600) // 60)
+    seconds = int(duration_seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours > 0 else f"{minutes:02d}:{seconds:02d}"
     #-------- FIN DE FUNCIONES AUXILIARES ------- 
 
 
@@ -136,6 +159,50 @@ async def get_stream_status():
             return {"is_live": True, "method": "file_fallback", "name": "norte"}
             
         return {"is_live": False, "error": str(e)}
+
+
+
+@app.get("/files/{filename}/thumbnail")
+async def get_video_thumbnail(filename: str):
+    """
+    Genera una miniatura JPEG del punto medio del video.
+    """
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    file_path = os.path.join(RUTA_VIDEOS, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+
+    # 1. Obtener la duración para calcular el punto medio
+    duration = await get_raw_duration(file_path)
+    mid_point = duration / 2
+
+    # 2. Comando FFmpeg para extraer 1 frame en el punto medio
+    # -ss: posicionamiento rápido antes del input
+    # -frames:v 1: extraer solo un cuadro
+    # -q:v 2: calidad alta (2-31, menor es mejor)
+    command = [
+        'ffmpeg',
+        '-ss', str(mid_point),
+        '-i', file_path,
+        '-frames:v', '1',
+        '-q:v', '4', 
+        '-f', 'image2',
+        'pipe:1'
+    ]
+
+    def stream_thumbnail():
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            while True:
+                chunk = process.stdout.read(4096)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.terminate()
+            process.wait()
+
+    return StreamingResponse(stream_thumbnail(), media_type="image/jpeg")
 
 @app.get("/files/{filename}/preview")
 async def get_video_preview(filename: str, seconds: int = 3):
