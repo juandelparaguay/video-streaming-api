@@ -185,7 +185,7 @@ async def get_video_thumbnail(filename: str):
         '-ss', str(mid_point),
         '-i', file_path,
         '-frames:v', '1',
-        '-q:v', '4', 
+        '-q:v', '15', 
         '-f', 'image2',
         'pipe:1'
     ]
