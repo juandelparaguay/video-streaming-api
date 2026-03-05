@@ -10,7 +10,7 @@ from datetime import datetime
 import subprocess
 import httpx
 import xml.etree.ElementTree as ET
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 load_dotenv()
 
@@ -99,9 +99,18 @@ async def stream_stop(name: str = Form(...)):
     return {"status": "ok"}
 
 @app.get("/streams/active")
-async def get_active_streams():
-    """Retorna la lista de transmisiones actuales para la App."""
-    return load_status()
+async def get_active_streams() -> List[Dict]:
+    """
+    Retorna la lista de transmisiones actuales formateada para Flutter.
+    Ejemplo: [{"name": "norte", "is_live": true, ...}, {"name": "sur", ...}]
+    """
+    status_dict = load_status()
+    active_list = []
+    for name, info in status_dict.items():
+        stream_info = {"name": name}
+        stream_info.update(info)
+        active_list.append(stream_info)
+    return active_list
 
 @app.get("/stream-status")
 async def get_stream_status():
