@@ -1,20 +1,40 @@
-from fastapi import FastAPI, HTTPException, Header, Request, Query
+# from fastapi import FastAPI, HTTPException, Header, Request, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Header, Form
 from fastapi.responses import StreamingResponse
 from collections import Counter
 import os
+import json
 import aiofiles
 from dotenv import load_dotenv
 from datetime import datetime
 import subprocess
 import httpx
 import xml.etree.ElementTree as ET
-from typing import Optional
+from typing import Optional, Dict
 
 load_dotenv()
 
 app = FastAPI()
 
+STATUS_FILE = "stream_status.json"
+
 # --- Funciones auxiliares para formato de datos ---
+def save_status(data: Dict):
+    """Guarda el estado de los streams activos en un archivo JSON."""
+    with open(STATUS_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def load_status() -> Dict:
+    """Carga el estado de los streams activos."""
+    if not os.path.exists(STATUS_FILE):
+        return {}
+    with open(STATUS_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+
 def format_size(size_in_bytes: int):
     if size_in_bytes is None:
         return "N/A"
@@ -57,11 +77,37 @@ async def get_video_duration_formatted(file_path: str) -> str:
 async def root():
     return {"message": "Servidor de Video Streaming Activo"}
 
+@app.post("/stream/start")
+async def stream_start(name: str = Form(...), addr: str = Form(...)):
+    """Llamado por Nginx on_publish."""
+    status = load_status()
+    status[name] = {
+        "is_live": True,
+        "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "client_ip": addr
+    }
+    save_status(status)
+    return {"status": "ok"}
+
+@app.post("/stream/stop")
+async def stream_stop(name: str = Form(...)):
+    """Llamado por Nginx on_done."""
+    status = load_status()
+    if name in status:
+        del status[name]
+        save_status(status)
+    return {"status": "ok"}
+
+@app.get("/streams/active")
+async def get_active_streams():
+    """Retorna la lista de transmisiones actuales para la App."""
+    return load_status()
+
 @app.get("/stream-status")
 async def get_stream_status():
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost/stat", timeout=2.0)
+            response = await client.get("http://localhost:8003/stat", timeout=2.0)
             
         if response.status_code != 200:
             return {"is_live": False, "message": "No se pudo conectar con Nginx stat"}
