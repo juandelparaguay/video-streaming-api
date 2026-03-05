@@ -112,6 +112,27 @@ async def get_active_streams() -> List[Dict]:
         active_list.append(stream_info)
     return active_list
 
+@app.get("/streams/active/{name}")
+async def get_active_stream_by_name(name: str):
+    """
+    Busca una transmisión específica por nombre.
+    Retorna el objeto con los datos o {is_live: false} si no existe.
+    """
+    status_dict = load_status()
+    
+    if name in status_dict:
+        # Si existe, retornamos los datos incluyendo el nombre
+        result = {"name": name}
+        result.update(status_dict[name])
+        return result
+    
+    # Si no existe, retornamos el objeto por defecto solicitado
+    return {
+        "name": name,
+        "is_live": False,
+        "message": "No hay una transmisión activa con ese nombre."
+    }
+
 @app.get("/stream-status")
 async def get_stream_status():
     try:
