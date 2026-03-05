@@ -325,22 +325,6 @@ async def get_videos_count_by_date():
         raise HTTPException(status_code=500, detail=f"Error al procesar estadísticas: {str(e)}")
 
     
-@app.get("/files/{filename}")
-async def get_file(filename: str):
-    
-    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
-    
-    file_path = os.path.join(RUTA_VIDEOS, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=400, detail="Path is not a file")
-    async def video_stream():
-        async with aiofiles.open(file_path, mode="rb") as file:
-            while chunk := await file.read(1024 * 1024):  # Lee en chunks de 1MB
-                yield chunk
-
-    return StreamingResponse(video_stream(), media_type="video/mp4")
 
 @app.get("/files/{filename}")
 async def get_file(filename: str, request: Request, range: str = Header(None)):
@@ -358,15 +342,12 @@ async def get_file(filename: str, request: Request, range: str = Header(None)):
     
     # Si no hay cabecera de rango (Range), enviamos el archivo completo normalmente
     if not range:
-        def full_stream():
-            with open(file_path, mode="rb") as f:
-                yield from f
+        async def video_stream():
+            async with aiofiles.open(file_path, mode="rb") as file:
+                while chunk := await file.read(1024 * 1024):  # Lee en chunks de 1MB
+                    yield chunk
 
-        return StreamingResponse(
-            full_stream(), 
-            media_type="video/mp4",
-            headers={"Content-Length": str(file_size), "Accept-Ranges": "bytes"}
-        )
+        return StreamingResponse(video_stream(), media_type="video/mp4")
 
     # Lógica para procesar el rango (ej: "bytes=0-1000")
     try:
