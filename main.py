@@ -342,6 +342,65 @@ async def get_file(filename: str):
 
     return StreamingResponse(video_stream(), media_type="video/mp4")
 
+@app.get("/files/{filename}")
+async def get_file(filename: str, request: Request, range: str = Header(None)):
+    """
+    Sirve videos con soporte para Byte Range Requests, necesario para iOS y Safari.
+    """
+
+    RUTA_VIDEOS = os.getenv('RUTA_VIDEOS')
+    file_path = os.path.join(RUTA_VIDEOS, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+
+    file_size = os.path.getsize(file_path)
+    
+    # Si no hay cabecera de rango (Range), enviamos el archivo completo normalmente
+    if not range:
+        def full_stream():
+            with open(file_path, mode="rb") as f:
+                yield from f
+
+        return StreamingResponse(
+            full_stream(), 
+            media_type="video/mp4",
+            headers={"Content-Length": str(file_size), "Accept-Ranges": "bytes"}
+        )
+
+    # Lógica para procesar el rango (ej: "bytes=0-1000")
+    try:
+        range_value = range.replace("bytes=", "")
+        start_str, end_str = range_value.split("-")
+        start = int(start_str)
+        # Si no hay fin, el fin es el final del archivo
+        end = int(end_str) if end_str else file_size - 1
+    except ValueError:
+        raise HTTPException(status_code=416, detail="Rango no válido")
+
+    if start >= file_size:
+        raise HTTPException(status_code=416, detail="Rango fuera de límites")
+
+    chunk_size = (end - start) + 1
+    
+    def get_video_chunk(start_pos, length):
+        with open(file_path, mode="rb") as f:
+            f.seek(start_pos)
+            yield f.read(length)
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(chunk_size),
+    }
+
+    return StreamingResponse(
+        get_video_chunk(start, chunk_size),
+        status_code=206,  
+        media_type="video/mp4",
+        headers=headers
+    )
+
 
     
                 
